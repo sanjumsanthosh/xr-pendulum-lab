@@ -45,15 +45,21 @@ int main() {
 
     // capturing motion
     const PendulumState initialState{
-        PI * initalAngleDegree / 100,
+        PI * initalAngleDegree / 180.0,
         0.0
     };
 
+    PendulumState state = initialState;
+    const double dt = 0.01;
+    const int totalSteps = 1000;
 
-    for (int i = 0; i < 10; i++) {
-        double dt = i*0.1;
-        PendulumState afterState = calculateState(initialState, gravity, shortLenght, dt);
-        std::cout << dt << " | Initial state : " << afterState.angleRadians << " | " << afterState.angularVelocity << std::endl;
+    for (int step = 1; step <= totalSteps; ++step) {
+        state = calculateState(state, gravity, shortLenght, dt);
+        const double timeSeconds = step * dt;
+        std::cout << timeSeconds
+                  << " | Angle (rad): " << state.angleRadians
+                  << " | Angular velocity (rad/s): " << state.angularVelocity
+                  << '\n';
     }
 
     return 0;
