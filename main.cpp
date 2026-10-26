@@ -2,37 +2,14 @@
 // Created by Sanjay M Santhosh on 24/10/26.
 //
 
-#include <cmath>
+#include "pendulum.hpp"
 #include <iostream>
-
-double CalculatePeriod(double lenght, double gravity) {
-    constexpr double PI = 3.14159265358979323846;
-    return 2.0 * PI *  std::sqrt(lenght/gravity);
-}
-
-struct PendulumState {
-    double angleRadians;
-    double angularVelocity;
-};
-
-PendulumState calculateState(PendulumState state,double gravity, double length, double dt) {
-
-    double angularAccleration =  -gravity * std::sin(state.angleRadians) / length;
-    double angularVelcity = state.angularVelocity + angularAccleration*dt;
-
-    state.angularVelocity = angularVelcity;
-    state.angleRadians = state.angleRadians + angularVelcity*dt;
-
-
-    return state;
-}
 
 int main() {
 
     const double gravity = 9.8;
     const double shortLenght = 1;
     const double longLenght = 2;
-    constexpr double PI = 3.14159265358979323846;
     const double initalAngleDegree = 30;
 
     const double shortPeriod = CalculatePeriod(shortLenght, gravity);
@@ -40,7 +17,7 @@ int main() {
 
     std::cout << "Short period : " << shortPeriod << std::endl;
     std::cout << "Long period : " << longPeriod << std::endl;
-    std::cout << "Ration : "<< longPeriod / shortPeriod << std::endl;
+    std::cout << "Ratio : "<< longPeriod / shortPeriod << std::endl;
 
 
     // capturing motion
@@ -53,14 +30,39 @@ int main() {
     const double dt = 0.01;
     const int totalSteps = 1000;
 
+    PeriodMeasurement measurement;
+
     for (int step = 1; step <= totalSteps; ++step) {
+        const double previousAngle = state.angleRadians;
         state = calculateState(state, gravity, shortLenght, dt);
         const double timeSeconds = step * dt;
+
+        const double periodSeconds = measurement.record(
+            previousAngle, state.angleRadians, timeSeconds, dt);
+        if (periodSeconds > 0.0) {
+            std::cout << "Measured period " << measurement.count
+                      << ": " << periodSeconds << " s\n";
+        }
+
         std::cout << timeSeconds
                   << " | Angle (rad): " << state.angleRadians
                   << " | Angular velocity (rad/s): " << state.angularVelocity
                   << '\n';
     }
+
+    if (measurement.count == 0) {
+        std::cerr << "Not enough crossings to measure a complete period.\n";
+        return 1;
+    }
+
+    const double measuredPeriod = measurement.mean();
+    const double differencePercent =
+        std::abs(measuredPeriod - shortPeriod) / shortPeriod * 100.0;
+
+    std::cout << "\nCompleted periods: " << measurement.count << '\n';
+    std::cout << "Predicted period (small-angle): " << shortPeriod << " s\n";
+    std::cout << "Mean measured period: " << measuredPeriod << " s\n";
+    std::cout << "Difference from prediction: " << differencePercent << "%\n";
 
     return 0;
 }

@@ -1,2 +1,7 @@
 .venv/
 /.idea/
+node_modules/
+dist/
+public/wasm/
+/main
+.cache/

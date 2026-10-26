@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>XR Pendulum Lab</title>
+  <link rel="icon" href="data:," />
+</head>
+<body>
+  <h1>XR Pendulum Lab</h1>
+  <p id="engine-status" role="status">Loading C++ simulation…</p>
+
+  <fieldset>
+    <legend>Settings</legend>
+    <p>
+      <label for="length">Length of A (m):</label>
+      <input id="length" type="range" min="0.3" max="1" step="0.05" value="1" />
+      <output id="length-value" for="length">1.00 m</output>
+    </p>
+    <p>
+      <label for="angle">Release angle:</label>
+      <input id="angle" type="range" min="5" max="70" step="5" value="30" />
+      <output id="angle-value" for="angle">30°</output>
+    </p>
+    <p>
+      <label for="gravity">Gravity:</label>
+      <select id="gravity">
+        <option value="9.8">Earth (9.8 m/s²)</option>
+        <option value="1.62">Moon (1.62 m/s²)</option>
+      </select>
+    </p>
+    <p>B is twice as long as A. Changing a setting resets the trial.</p>
+    <button id="play" disabled>Start</button>
+    <button id="reset" disabled>Reset</button>
+    <button id="enter-xr" disabled>Checking WebXR…</button>
+  </fieldset>
+
+  <p id="run-status">Ready</p>
+  <div id="viewport"><canvas id="scene" aria-label="Two interactive pendulums"></canvas></div>
+  <p>A is green; B is orange. Drag a bob to set its angle and release it. Drag empty space to rotate the view.</p>
+
+  <h2>Results</h2>
+  <table>
+    <thead><tr><th>Pendulum</th><th>Predicted period (s)</th><th>Measured period (s)</th><th>Measurement</th></tr></thead>
+    <tbody>
+      <tr><th>A</th><td id="theory-a">—</td><td id="period-a">—</td><td id="count-a">Waiting</td></tr>
+      <tr><th>B</th><td id="theory-b">—</td><td id="period-b">—</td><td id="count-b">Waiting</td></tr>
+    </tbody>
+  </table>
+  <p>Measured period ratio (B/A): <span id="ratio">—</span>. Expected at equal release angles: √2 ≈ 1.414.</p>
+  <p id="ratio-caption"></p>
+  <p>The prediction uses the small-angle formula. The measured period comes from simulated centre crossings in the same direction. Larger release angles take longer.</p>
+
+  <details>
+    <summary>Simulation details</summary>
+    <p>Simulated time: <span id="sim-time">0.00 s</span></p>
+    <p>Frame interval median / p95: <span id="frame-time">Collecting…</span></p>
+    <p>C++ compiled to WebAssembly. Fixed physics step: 0.005 s. Ideal pendulum, without friction or drag.</p>
+    <p>Pausing or hiding the tab stops simulated time. Catch-up is capped at 100 ms per frame. Frame intervals are not GPU timings or headset benchmarks.</p>
+  </details>
+
+  <h2>WebXR</h2>
+  <p id="xr-status" role="status">Checking this browser.</p>
+  <p>In a compatible headset, select Enter VR. Point at a bob, hold the trigger to pull it, then release. Point at RESET TRIAL to restart.</p>
+  <p>Remote headset access requires HTTPS. Headset interaction has not yet been tested on hardware.</p>
+  <p id="error" role="alert" hidden></p>
+  <script type="module" src="/web/main.js"></script>
+</body>
+</html>
