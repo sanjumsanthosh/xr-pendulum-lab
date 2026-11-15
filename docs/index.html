@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XR Pendulum Lab — sim measured against theory</title>
+<meta name="description" content="One C++17 physics core running natively, in WebAssembly and in WebXR. Analytic period versus measured period, with sub-frame crossing detection.">
+<meta name="theme-color" content="#0a0e1a">
+<meta property="og:title" content="XR Pendulum Lab — sim measured against theory">
+<meta property="og:description" content="Semi-implicit Euler, zero-crossing period measurement, Three.js scene, WebXR controllers.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕰️</text></svg>">
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --panel: #111726;
+    --panel-2: #0e1422;
+    --line: #1f2a40;
+    --text: #e2e8f5;
+    --muted: #8b98b4;
+    --cyan: #22d3ee;
+    --violet: #a78bfa;
+    --green: #34d399;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(900px 520px at 18% -10%, rgba(167,139,250,.12), transparent 62%),
+      radial-gradient(760px 460px at 88% 4%, rgba(34,211,238,.10), transparent 58%),
+      var(--bg);
+    color: var(--text); font-family: var(--sans); font-size: 17px; line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--cyan); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { width: min(1040px, 92vw); margin: 0 auto; }
+
+  header { display: flex; align-items: center; justify-content: space-between; padding: 20px 0; border-bottom: 1px solid var(--line); }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 650; letter-spacing: -.015em; }
+  nav { display: flex; gap: 20px; font-size: .86rem; }
+  nav a { color: var(--muted); }
+  nav a:hover { color: var(--text); text-decoration: none; }
+
+  .hero { display: grid; grid-template-columns: 1.05fr .95fr; gap: 36px; align-items: center; padding: 56px 0 28px; }
+  .kicker { font-family: var(--mono); font-size: .7rem; letter-spacing: .16em; text-transform: uppercase; color: var(--cyan); margin: 0 0 12px; }
+  h1 { font-size: clamp(2rem, 4.6vw, 3.15rem); line-height: 1.06; letter-spacing: -.04em; margin: 0 0 18px; font-weight: 700; }
+  h1 em { font-style: normal; background: linear-gradient(96deg, var(--violet), var(--cyan)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lede { color: var(--muted); margin: 0 0 24px; max-width: 54ch; }
+  .lede strong { color: var(--text); font-weight: 600; }
+  .cta { display: flex; flex-wrap: wrap; gap: 10px; }
+  .btn { display: inline-block; font-size: .88rem; font-weight: 600; padding: 10px 17px; border-radius: 8px; background: linear-gradient(96deg, #7c3aed, #06b6d4); color: #05121a; }
+  .btn:hover { text-decoration: none; filter: brightness(1.08); }
+  .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  .btn.ghost:hover { border-color: var(--muted); }
+
+  /* pendulum visual */
+  .stage { position: relative; background: linear-gradient(180deg, #0e1524, #0a0f1c); border: 1px solid var(--line); border-radius: 14px; padding: 18px; overflow: hidden; }
+  .stage::after {
+    content: ""; position: absolute; inset: 0;
+    background-image: linear-gradient(rgba(34,211,238,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,.05) 1px, transparent 1px);
+    background-size: 26px 26px; pointer-events: none;
+  }
+  .stage-head { display: flex; justify-content: space-between; font-family: var(--mono); font-size: .67rem; color: var(--muted); letter-spacing: .06em; margin-bottom: 8px; }
+  svg.pend { width: 100%; height: 260px; display: block; }
+  .pivot { fill: #64748b; }
+  .arm { stroke: #94a3b8; stroke-width: 2; }
+  .bob { fill: var(--cyan); filter: drop-shadow(0 0 10px rgba(34,211,238,.65)); }
+  .swing { transform-origin: 160px 22px; animation: swing 2.006s cubic-bezier(.45,0,.55,1) infinite alternate; }
+  @keyframes swing { from { transform: rotate(-22deg); } to { transform: rotate(22deg); } }
+  .trace { fill: none; stroke: rgba(167,139,250,.35); stroke-dasharray: 3 5; stroke-width: 1.2; }
+  .hud { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; font-family: var(--mono); }
+  .hud div { background: rgba(255,255,255,.03); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
+  .hud b { display: block; font-size: .95rem; color: var(--text); font-weight: 600; }
+  .hud span { font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+
+  section { padding: 54px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: clamp(1.3rem, 3.1vw, 1.75rem); letter-spacing: -.025em; margin: 0 0 12px; font-weight: 680; }
+  .sub { color: var(--muted); max-width: 68ch; margin: 0 0 30px; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 11px; padding: 17px 19px; }
+  .card h3 { margin: 0 0 7px; font-size: .95rem; }
+  .card p { margin: 0; font-size: .86rem; color: var(--muted); line-height: 1.55; }
+  .card .tag { font-family: var(--mono); font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; color: var(--violet); display: block; margin-bottom: 6px; }
+
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+  pre.code {
+    background: #070b14; border: 1px solid var(--line); border-radius: 11px; padding: 17px 19px;
+    font-family: var(--mono); font-size: .78rem; line-height: 1.8; overflow-x: auto; margin: 0; color: #cbd5e1;
+  }
+  pre.code .k { color: var(--violet); }
+  pre.code .c { color: #64748b; }
+  pre.code .s { color: var(--green); }
+
+  table { width: 100%; border-collapse: collapse; font-size: .87rem; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--mono); font-size: .66rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+  td:first-child { font-family: var(--mono); font-size: .78rem; color: var(--cyan); }
+
+  ul.checks { list-style: none; padding: 0; margin: 0; display: grid; gap: 9px; }
+  ul.checks li { position: relative; padding-left: 22px; color: var(--muted); font-size: .89rem; }
+  ul.checks li::before { content: "›"; position: absolute; left: 4px; color: var(--cyan); }
+
+  footer { border-top: 1px solid var(--line); padding: 26px 0 52px; font-family: var(--mono); font-size: .74rem; color: var(--muted); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; gap: 26px; }
+    .grid { grid-template-columns: 1fr 1fr; }
+    .two { grid-template-columns: 1fr; }
+    nav a:not(:last-child) { display: none; }
+  }
+  @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } .hud { grid-template-columns: 1fr 1fr; } }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .swing { animation: none; transform: rotate(-18deg); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">🕰️ XR Pendulum Lab</div>
+    <nav>
+      <a href="#how">how it works</a>
+      <a href="#run">run it</a>
+      <a href="#status">status</a>
+      <a href="https://github.com/sanjumsanthosh/xr-pendulum-lab">github ↗</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" style="border-top:none">
+      <div>
+        <p class="kicker">theory vs. simulation</p>
+        <h1>Most demos animate.<br><em>This one measures.</em></h1>
+        <p class="lede">
+          A pendulum lab with one C++17 core compiled twice — native for tests, WebAssembly for the
+          browser. The period is <strong>measured from real zero-crossings</strong> and compared to
+          <strong>2π√(L/g)</strong>, not assumed to match.
+        </p>
+        <div class="cta">
+          <a class="btn" href="https://github.com/sanjumsanthosh/xr-pendulum-lab">Read the core →</a>
+          <a class="btn ghost" href="#how">How it works</a>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="stage-head"><span>length 1.00 m · g 9.81 m/s²</span><span>LIVE</span></div>
+        <svg class="pend" viewBox="0 0 320 260" role="img" aria-label="Animated pendulum, illustrative">
+          <path class="trace" d="M60 200 Q 160 250 260 200" />
+          <g class="swing">
+            <line class="arm" x1="160" y1="22" x2="160" y2="196" />
+            <circle class="bob" cx="160" cy="202" r="11" />
+          </g>
+          <circle class="pivot" cx="160" cy="22" r="5" />
+        </svg>
+        <div class="hud">
+          <div><b>2.006 s</b><span>analytic</span></div>
+          <div><b>crossings</b><span>measured</span></div>
+          <div><b>~0.1 ms</b><span>frame median</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="how">
+      <p class="kicker" style="color:var(--violet)">one core, three consumers</p>
+      <h2>The physics doesn't get reimplemented</h2>
+      <p class="sub">The same header compiles into the native test binary and into the WASM module the browser runs. There is no second implementation to drift out of sync.</p>
+
+      <div class="two">
+        <pre class="code"><span class="c">// pendulum.hpp — semi-implicit Euler, one step</span>
+<span class="k">const double</span> acceleration =
+  -gravity * std::sin(state.angleRadians) / length;
+state.angularVelocity += acceleration * dt;
+state.angleRadians    += state.angularVelocity * dt;
+
+<span class="c">// small-angle theory, for comparison</span>
+T = 2.0 * PI * std::sqrt(length / gravity);</pre>
+        <div>
+          <ul class="checks">
+            <li><b>Sub-frame crossings.</b> The period is interpolated between the two samples straddling a zero-crossing, so it isn't quantised to the frame rate.</li>
+            <li><b>Measurement, not assertion.</b> The HUD shows analytic period next to the measured one — the gap is the interesting part.</li>
+            <li><b>Warnings are errors.</b> The native suite compiles with <code>-Wall -Wextra -Werror</code>.</li>
+            <li><b>Reset is clean.</b> Changing length or gravity reinitialises the lab instead of leaving stale state.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <p class="kicker" style="color:var(--violet)">in the browser</p>
+      <h2>Three pendulums, a HUD, and controllers</h2>
+      <div class="grid">
+        <div class="card"><span class="tag">scene</span><h3>Three.js 0.186</h3><p>Orbit controls with damping, three pendulums at scaled lengths so the period change is visible side by side.</p></div>
+        <div class="card"><span class="tag">hud</span><h3>Canvas textures</h3><p>Period, measured period, error and median frame time over the last 30 frames, rendered into the scene.</p></div>
+        <div class="card"><span class="tag">xr</span><h3>WebXR controllers</h3><p>Controller objects are wired into the scene; grab-and-release interaction is the next milestone.</p></div>
+      </div>
+    </section>
+
+    <section id="run">
+      <p class="kicker" style="color:var(--violet)">run it</p>
+      <h2>Two toolchains, one command each</h2>
+      <div class="two">
+        <pre class="code"><span class="c"># needs emscripten (emcc) and a C++17 compiler</span>
+<span class="s">$</span> npm install
+<span class="s">$</span> npm run dev      <span class="c"># builds wasm, then vite</span>
+<span class="s">$</span> npm test         <span class="c"># native + wasm suites</span>
+
+<span class="c"># CXX=clang++ to pick a compiler</span></pre>
+        <div class="card">
+          <h3>What the tests actually do</h3>
+          <table style="margin-top:8px">
+            <tbody>
+              <tr><td>native</td><td>compiles <code>tests/physics.cpp</code>, runs it</td></tr>
+              <tr><td>wasm</td><td><code>node --test tests/wasm.test.mjs</code></td></tr>
+              <tr><td>harness</td><td><code>scripts/test-native.mjs</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="status">
+      <p class="kicker" style="color:var(--violet)">status</p>
+      <h2>What works, what's next</h2>
+      <div class="grid">
+        <div class="card"><h3>Working</h3><p>Simulation, period measurement, native/WASM parity, browser scene with frame profiling.</p></div>
+        <div class="card"><h3>Next</h3><p>OpenXR grab-and-release on the bob, so the pendulum can be perturbed by hand in a headset.</p></div>
+        <div class="card"><h3>Also planned</h3><p>An error-versus-<code>dt</code> sweep that makes the integrator's accuracy visible instead of claimed.</p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>illustrative HUD values — the lab computes its own</span>
+    <span><a href="https://github.com/sanjumsanthosh/xr-pendulum-lab">source</a></span>
+  </footer>
+</div>
+</body>
+</html>
